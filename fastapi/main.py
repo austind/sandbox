@@ -1,20 +1,12 @@
 """
 https://fastapi.tiangolo.com/#example
 """
-from typing import Optional, Union
 
-from pydantic import BaseModel
+from models import Item
 
 from fastapi import FastAPI
 
 app = FastAPI()
-
-
-class Item(BaseModel):
-    id: int
-    name: str
-    price: float
-    is_offer: Optional[bool]
 
 
 @app.get("/")
@@ -23,7 +15,7 @@ def read_root():
 
 
 @app.get("/items/{item_id}")
-def read_item(item_id: int, q: Union[str, None] = None):
+def read_item(item_id: int, q: str | None = None):
     return {"item_id": item_id, "q": q}
 
 

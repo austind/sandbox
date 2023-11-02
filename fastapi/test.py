@@ -1,16 +1,8 @@
 """ Test PUT data to a the FastAPI endpoint defined in main.py """
-from typing import Optional
 
 import httpx
 import ipdb
-from pydantic import BaseModel
-
-
-class Item(BaseModel):
-    id: int
-    name: str
-    price: float
-    is_offer: Optional[bool] = None
+from models import Item
 
 
 def main():
