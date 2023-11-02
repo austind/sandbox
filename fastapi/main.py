@@ -2,11 +2,12 @@
 https://fastapi.tiangolo.com/#example
 """
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from models import Item
 
 from fastapi import FastAPI, Query
+import uvicorn
 
 app = FastAPI()
 
@@ -32,3 +33,14 @@ async def read_item(item_id: int, q: str | None = None):
 @app.put("/items/{item_id}")
 async def save_item(item: Item):
     return {"item_name": item.name, "item_price": item.price, "item_id": item.id}
+
+
+@app.get("/generate-config/{hostname}")
+async def generate_config(
+    hostname: str, format: Literal["json", "yaml"] = "json", force_fresh: bool = False
+):
+    return {"hostname": hostname, "format": format}
+
+
+if __name__ == "__main__":
+    uvicorn.run(app=app, port=8000)
