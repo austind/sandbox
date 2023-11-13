@@ -1,0 +1,12 @@
+[project]
+requires-python = ">=3.10"
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+extend-select = [
+    "I",    # isort
+    "UP",   # pyupgrade
+    "PL",   # pylint
+]

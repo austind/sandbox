@@ -1,3 +1,7 @@
 fastapi
 black
 uvicorn
+httpx
+ipdb
+ruff
+pan-os-python
