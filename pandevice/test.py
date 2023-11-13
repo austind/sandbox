@@ -16,6 +16,6 @@ cmd = re.sub(r"\s{2,}+", "", xml).replace("\n", "")
 response = httpx.get(
     f"https://{config.HOST}/api/?type=op&cmd={cmd}&key={config.API_KEY}", verify=False
 )
-# status = httpx.get(f'https://{config.HOST}/api/?type=log&action=get&job-id=')
+# status = httpx.get(f'https://{config.HOST}/api/?key={config.API_KEY}&type=log&action=get&job-id=')
 # response = httpx.get(f'https://{config.HOST}/api/?type=keygen&user={config.USERNAME}&password={config.PASSWORD}', verify=False)
 ipdb.set_trace()
