@@ -2,7 +2,9 @@ from panos.panorama import Panorama
 import config
 import ipdb
 
-pano = Panorama(hostname=config.HOST, api_username=config.USERNAME, api_password=config.PASSWORD)
+pano = Panorama(
+    hostname=config.HOST, api_username=config.USERNAME, api_password=config.PASSWORD
+)
 import httpx
 from httpx import URL
 import xml.etree.ElementTree as ET

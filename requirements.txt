@@ -5,3 +5,5 @@ httpx
 ipdb
 ruff
 pan-os-python
+icmplib
+rich
