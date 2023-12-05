@@ -1,4 +1,4 @@
-from input import traceroute_results
+from config import traceroute_results
 from rich import print
 
 
