@@ -35,8 +35,8 @@ async def api_call(client: httpx.AsyncClient, city: str, page: int = 1) -> dict:
         - ValueError if no data found in the response.
 
     """
-    url = f"{BASE_URL}?city={city}&page={page}"
-    response = await client.get(url)
+    params = {'city': city, 'page': page}
+    response = await client.get(url=BASE_URL, params=params)
     response.raise_for_status()
     data = response.json()
     if not data["data"]:
