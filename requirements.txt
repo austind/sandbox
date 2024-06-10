@@ -8,3 +8,5 @@ pan-os-python
 icmplib
 rich
 napalm
+h2
+isort

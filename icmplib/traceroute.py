@@ -1,7 +1,9 @@
-from icmplib import traceroute, Hop
-import config
 from socket import gethostbyaddr
+
+import config
 from rich import print
+
+from icmplib import Hop, traceroute
 
 trace = traceroute(config.TRACE_DEST)
 hosts = []

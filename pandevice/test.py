@@ -1,14 +1,15 @@
-from panos.panorama import Panorama
 import config
 import ipdb
+from panos.panorama import Panorama
 
 pano = Panorama(
     hostname=config.HOST, api_username=config.USERNAME, api_password=config.PASSWORD
 )
+import re
+import xml.etree.ElementTree as ET
+
 import httpx
 from httpx import URL
-import xml.etree.ElementTree as ET
-import re
 
 root = ET.Element("request-batch")
 op = ET.SubElement(root, "op-command")

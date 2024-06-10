@@ -1,7 +1,8 @@
-from panos.panorama import Panorama as OriginalPanorama
+import xml.etree.ElementTree as ET
+
 import config
 import ipdb
-import xml.etree.ElementTree as ET
+from panos.panorama import Panorama as OriginalPanorama
 
 
 class Panorama(OriginalPanorama):

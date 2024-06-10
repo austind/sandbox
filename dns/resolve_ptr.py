@@ -1,10 +1,9 @@
-from config import traceroute_results
-from rich import print
-
-
+import ipaddress
 import re
 import socket
-import ipaddress
+
+from config import traceroute_results
+from rich import print
 
 
 def resolve_ptr(ip_address: ipaddress.IPv4Address | str) -> str:

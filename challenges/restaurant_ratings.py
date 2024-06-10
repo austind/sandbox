@@ -1,6 +1,6 @@
 import asyncio
-import pprint
 import logging
+import pprint
 
 import httpx
 
@@ -19,10 +19,11 @@ BASE_URL = "https://jsonmock.hackerrank.com/api/food_outlets"
 logging.basicConfig(handlers=[logging.StreamHandler()], level=logging.DEBUG)
 
 
-async def api_call(city: str, page: int = 1) -> dict:
+async def api_call(client: httpx.AsyncClient, city: str, page: int = 1) -> dict:
     """Make an API call to retrieve a single page of data for a given city.
 
     Args:
+        client: Open instance of httpx.AsyncClient to use.
         city: Name of the city to retrieve restaurant data for.
         page: Page of data to retrieve. Defaults to 1.
 
@@ -59,19 +60,22 @@ async def get_restaurant_data(city: str) -> list[dict]:
         N/A
 
     """
-    data: dict = await api_call(city=city)
-    if data["total_pages"] > 1:
-        coros = [
-            api_call(city=city, page=page) for page in range(2, data["total_pages"] + 1)
-        ]
-        page_data = await asyncio.gather(*coros)
-        for page in page_data:
-            data["data"].extend(page["data"])
-    return data["data"]
+    limits = httpx.Limits(max_keepalive_connections=10, max_connections=10)
+    async with httpx.AsyncClient(http2=True, limits=limits) as client:
+        data = await api_call(client=client, city=city, page=1)
+        if data["total_pages"] > 1:
+            tasks = [
+                api_call(client=client, city=city, page=page)
+                for page in range(2, data["total_pages"] + 1)
+            ]
+            page_data = await asyncio.gather(*tasks)
+            for page in page_data:
+                data["data"].extend(page["data"])
+        return data["data"]
 
 
 async def get_highest_rated_restaurants(city: str, limit: int = 5) -> list[str]:
-    """Get the N restaurants in a given city that all share the same highest rating.
+    """Get the N restaurants in a given city that all share the highest rating.
 
     For example: if the highest rated restaurant in a city has 4.7 stars,
     only restaurants that also have 4.7 star ratings (up to limit) will be returned.
@@ -100,6 +104,5 @@ async def get_highest_rated_restaurants(city: str, limit: int = 5) -> list[str]:
 
 
 if __name__ == "__main__":
-    client = httpx.AsyncClient()
     results = asyncio.run(get_highest_rated_restaurants(city=CITY))
     pprint.pprint(results)

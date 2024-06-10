@@ -4,10 +4,10 @@ https://fastapi.tiangolo.com/#example
 
 from typing import Annotated, Literal
 
+import uvicorn
 from models import Item
 
 from fastapi import FastAPI, Query
-import uvicorn
 
 app = FastAPI()
 
