@@ -1,8 +1,10 @@
 import asyncio
-import logging
 import pprint
+from typing import Annotated
 
 import httpx
+import uvloop
+from pydantic import BaseModel, Field, PositiveFloat, PositiveInt
 
 """Return a list of top-rated restaurants in a given city.
 
@@ -12,14 +14,33 @@ restaurant has an average rating of 4.7 stars, return only up to five
 total restaurants that also have 4.7 stars.
 """
 
-CITY = "denver"
+CITY = "seattle"
 BASE_URL = "https://jsonmock.hackerrank.com/api/food_outlets"
 
 
-logging.basicConfig(handlers=[logging.StreamHandler()], level=logging.DEBUG)
+# logging.basicConfig(handlers=[logging.StreamHandler()], level=logging.DEBUG)
+
+AvgRating = Annotated[PositiveFloat, Field(ge=0.0, le=5.0)]
 
 
-async def api_call(client: httpx.AsyncClient, city: str, page: int = 1) -> dict:
+class APIData(BaseModel):
+    city: str
+    estimated_cost: PositiveInt
+    id: PositiveInt
+    name: str
+    average_rating: AvgRating
+    votes: PositiveInt
+
+
+class APIResponse(BaseModel):
+    data: list[APIData]
+    page: PositiveInt
+    per_page: PositiveInt
+    total: PositiveInt
+    total_pages: PositiveInt
+
+
+async def api_call(client: httpx.AsyncClient, city: str, page: int = 1) -> APIResponse:
     """Make an API call to retrieve a single page of data for a given city.
 
     Args:
@@ -35,16 +56,34 @@ async def api_call(client: httpx.AsyncClient, city: str, page: int = 1) -> dict:
         - ValueError if no data found in the response.
 
     """
-    params = {'city': city, 'page': page}
+    params = {"city": city, "page": page}
     response = await client.get(url=BASE_URL, params=params)
     response.raise_for_status()
-    data = response.json()
-    if not data["data"]:
+    json = response.json()
+    if not json["data"]:
         raise ValueError(f'No restaurant data found for city "{city}"')
-    return data
+
+    data = [
+        APIData(
+            city=x["city"],
+            estimated_cost=x["estimated_cost"],
+            name=x["name"],
+            id=x["id"],
+            average_rating=x["user_rating"]["average_rating"],
+            votes=x["user_rating"]["votes"],
+        )
+        for x in json["data"]
+    ]
+    return APIResponse(
+        page=json["page"],
+        per_page=json["per_page"],
+        total=json["total"],
+        total_pages=json["total_pages"],
+        data=data,
+    )
 
 
-async def get_restaurant_data(city: str) -> list[dict]:
+async def get_restaurant_data(city: str) -> list[APIData]:
     """Get all pages of restaurant data for a given city.
 
     Retrieves all pages of restaurant data and concatenates results
@@ -62,16 +101,16 @@ async def get_restaurant_data(city: str) -> list[dict]:
     """
     limits = httpx.Limits(max_keepalive_connections=10, max_connections=10)
     async with httpx.AsyncClient(http2=True, limits=limits) as client:
-        data = await api_call(client=client, city=city, page=1)
-        if data["total_pages"] > 1:
+        response = await api_call(client=client, city=city, page=1)
+        if response.total_pages > 1:
             tasks = [
                 api_call(client=client, city=city, page=page)
-                for page in range(2, data["total_pages"] + 1)
+                for page in range(2, response.total_pages + 1)
             ]
             page_data = await asyncio.gather(*tasks)
             for page in page_data:
-                data["data"].extend(page["data"])
-        return data["data"]
+                response.data.extend(page.data)
+        return response.data
 
 
 async def get_highest_rated_restaurants(city: str, limit: int = 5) -> list[str]:
@@ -92,17 +131,13 @@ async def get_highest_rated_restaurants(city: str, limit: int = 5) -> list[str]:
 
     """
     data = await get_restaurant_data(city=city)
-    sorted_data = sorted(
-        data, key=lambda d: d["user_rating"]["average_rating"], reverse=True
-    )
-    highest_rating = sorted_data[0]["user_rating"]["average_rating"]
-    return [
-        x["name"]
-        for x in sorted_data
-        if x["user_rating"]["average_rating"] == highest_rating
-    ][:limit]
+    sorted_data = sorted(data, key=lambda d: d.average_rating, reverse=True)
+    highest_rating = sorted_data[0].average_rating
+    return [x.name for x in sorted_data if x.average_rating == highest_rating][:limit]
 
 
 if __name__ == "__main__":
+    # UVloop is a fast, drop-in replacement for the default event loop
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     results = asyncio.run(get_highest_rated_restaurants(city=CITY))
     pprint.pprint(results)
