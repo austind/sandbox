@@ -1,5 +1,7 @@
 import asyncio
+import logging
 import pprint
+import time
 from typing import Annotated
 
 import httpx
@@ -14,17 +16,18 @@ restaurant has an average rating of 4.7 stars, return only up to five
 total restaurants that also have 4.7 stars.
 """
 
-CITY = "seattle"
+CITY = "denver"
 BASE_URL = "https://jsonmock.hackerrank.com/api/food_outlets"
 
 
-# logging.basicConfig(handlers=[logging.StreamHandler()], level=logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG)
 
 AvgRating = Annotated[PositiveFloat, Field(ge=0.0, le=5.0)]
 
-# Modeling data in Pydantic offers robust data validation and the convenience of working
-# with objects for a modest performance penalty.
-class APIData(BaseModel):
+
+# Modeling data in Pydantic offers robust data validation, and the convenience of working
+# with objects, for a modest performance penalty.
+class RestaurantData(BaseModel):
     city: str
     estimated_cost: PositiveInt
     id: PositiveInt
@@ -34,7 +37,7 @@ class APIData(BaseModel):
 
 
 class APIResponse(BaseModel):
-    data: list[APIData]
+    data: list[RestaurantData]
     page: PositiveInt
     per_page: PositiveInt
     total: PositiveInt
@@ -65,7 +68,7 @@ async def api_call(client: httpx.AsyncClient, city: str, page: int = 1) -> APIRe
         raise ValueError(f'No restaurant data found for city "{city}"')
 
     data = [
-        APIData(
+        RestaurantData(
             city=x["city"],
             estimated_cost=x["estimated_cost"],
             name=x["name"],
@@ -84,7 +87,7 @@ async def api_call(client: httpx.AsyncClient, city: str, page: int = 1) -> APIRe
     )
 
 
-async def get_restaurant_data(city: str) -> list[APIData]:
+async def get_restaurant_data(city: str) -> list[RestaurantData]:
     """Get all pages of restaurant data for a given city.
 
     Retrieves all pages of restaurant data and concatenates results
@@ -138,7 +141,12 @@ async def get_highest_rated_restaurants(city: str, limit: int = 5) -> list[str]:
 
 
 if __name__ == "__main__":
-    # UVloop is a fast, drop-in replacement for the default event loop
+    # UVloop is a fast, drop-in replacement for the default event loop. Performance
+    # is comparable to golang.
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+    start_time = time.perf_counter()
     results = asyncio.run(get_highest_rated_restaurants(city=CITY))
+    end_time = time.perf_counter()
+    running_time = end_time - start_time
     pprint.pprint(results)
+    print(f"Running time: {running_time:4f}")
