@@ -45,15 +45,15 @@ class APIResponse(BaseModel):
 
 
 async def api_call(client: httpx.AsyncClient, city: str, page: int = 1) -> APIResponse:
-    """Make an API call to retrieve a single page of data for a given city.
+    """Make an API call for a single page of data for a given city.
 
     Args:
-        client: Open instance of httpx.AsyncClient to use.
+        client: Open instance of httpx.AsyncClient.
         city: Name of the city to retrieve restaurant data for.
         page: Page of data to retrieve. Defaults to 1.
 
     Returns:
-        An unmodified dict of API results.
+        An APIResponse model based on to the data structure returned by the API.
 
     Raises:
         - httpx.HTTPError if status code is not 2XX
@@ -88,7 +88,7 @@ async def api_call(client: httpx.AsyncClient, city: str, page: int = 1) -> APIRe
 
 
 async def get_restaurant_data(city: str) -> list[RestaurantData]:
-    """Get all pages of restaurant data for a given city.
+    """Get all restaurant data for a given city.
 
     Retrieves all pages of restaurant data and concatenates results
     into a single list, which is then returned.
@@ -97,7 +97,7 @@ async def get_restaurant_data(city: str) -> list[RestaurantData]:
         city: Name of the city to retrieve restaurant data for.
 
     Returns:
-        A list of all restaurant data for the given city.
+        A list of restaurant data for the given city.
 
     Raises:
         N/A
@@ -118,17 +118,17 @@ async def get_restaurant_data(city: str) -> list[RestaurantData]:
 
 
 async def get_highest_rated_restaurants(city: str, limit: int = 5) -> list[str]:
-    """Get the N restaurants in a given city that all share the highest rating.
+    """Get restaurants in a city that all share the highest average rating.
 
-    For example: if the highest rated restaurant in a city has 4.7 stars,
-    only restaurants that also have 4.7 star ratings (up to limit) will be returned.
+    I.e., if the highest rated restaurant in a city has 4.7 stars, only restaurants
+    that also have 4.7 star average ratings will be returned.
 
     Args:
         city: Name of the city to retrieve restaurant data for.
         limit: Maximum number of restaurants to list.
 
     Returns:
-        A list of restaurants that all share the highest rating.
+        A list of restaurant names that all share the highest average rating.
 
     Raises:
         N/A
