@@ -25,24 +25,29 @@ BASE_URL = "https://jsonmock.hackerrank.com/api/food_outlets"
 logging.basicConfig(level=logging.DEBUG)
 
 AvgRating = Annotated[PositiveFloat, Field(ge=0.0, le=5.0)]
+PositiveIntOrZero = Annotated[int, Field(ge=0)]
 
 
 # Modeling data in Pydantic offers robust data validation, and the convenience of working
 # with objects, for a modest performance penalty.
 class RestaurantData(BaseModel):
+    """Restaurant data model."""
+
     city: str
     estimated_cost: PositiveInt
     id: PositiveInt
     name: str
     average_rating: AvgRating
-    votes: PositiveInt
+    votes: PositiveIntOrZero
 
 
 class APIResponse(BaseModel):
+    """Raw API response model."""
+
     data: list[RestaurantData]
     page: PositiveInt
-    per_page: PositiveInt
-    total: PositiveInt
+    per_page: PositiveIntOrZero
+    total: PositiveIntOrZero
     total_pages: PositiveInt
 
 
