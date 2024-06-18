@@ -18,7 +18,7 @@ restaurant has an average rating of 4.7 stars, return only up to five
 total restaurants that also have 4.7 stars.
 """
 
-CITY = "seattle"
+CITY = "denver"
 BASE_URL = "https://jsonmock.hackerrank.com/api/food_outlets"
 
 
@@ -51,8 +51,11 @@ class APIResponse(BaseModel):
     total_pages: PositiveInt
 
 
-def retry_if_request_error(exception: Exception) -> bool:
-    """Only retry requests for RequestErrors.
+def retry_api_call(exception: Exception) -> bool:
+    """Whether to retry an API call based on the exception raised.
+
+    Passed to the retrying.retry() decorator to determine which exceptions
+    should be retried.
 
     RequestErrors are the only superclass of errors that might be transient
     and could potentially benefit from retry logic. All other exceptions should
@@ -68,9 +71,11 @@ def retry_if_request_error(exception: Exception) -> bool:
 @retry(
     wait_exponential_multiplier=1000,
     stop_max_attempt_number=3,
-    retry_on_exception=retry_if_request_error,
+    retry_on_exception=retry_api_call,
 )
-async def api_call(client: httpx.AsyncClient, city: str, page: int = 1) -> APIResponse:
+async def api_call(
+    client: httpx.AsyncClient, city: str, page: PositiveInt = 1
+) -> APIResponse:
     """Make an API call for a single page of data for a given city.
 
     Args:
@@ -150,7 +155,7 @@ async def get_restaurant_data(city: str) -> list[RestaurantData]:
         return response.data
 
 
-async def get_highest_rated_restaurants(city: str, limit: int = 5) -> list[str]:
+async def get_highest_rated_restaurants(city: str, limit: PositiveInt = 5) -> list[str]:
     """Get restaurants in a city that all share the highest average rating.
 
     I.e., if the highest rated restaurant in a city has 4.7 stars, only restaurants
@@ -168,9 +173,9 @@ async def get_highest_rated_restaurants(city: str, limit: int = 5) -> list[str]:
 
     """
     data = await get_restaurant_data(city=city)
-    sorted_data = sorted(data, key=lambda d: d.average_rating, reverse=True)
-    highest_rating = sorted_data[0].average_rating
-    return [x.name for x in sorted_data if x.average_rating == highest_rating][:limit]
+    data.sort(key=lambda m: m.average_rating, reverse=True)
+    highest_rating = data[0].average_rating
+    return [x.name for x in data if x.average_rating == highest_rating][:limit]
 
 
 if __name__ == "__main__":
@@ -182,4 +187,4 @@ if __name__ == "__main__":
     end_time = time.perf_counter()
     running_time = end_time - start_time
     pprint.pprint(results)
-    print(f"Running time: {running_time:4f}")
+    print(f"Running time: {running_time:4f}s")
