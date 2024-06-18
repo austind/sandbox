@@ -5,6 +5,7 @@ import time
 from typing import Annotated
 
 import httpx
+import orjson
 import uvloop
 from pydantic import BaseModel, Field, PositiveFloat, PositiveInt
 
@@ -63,7 +64,9 @@ async def api_call(client: httpx.AsyncClient, city: str, page: int = 1) -> APIRe
     params = {"city": city, "page": page}
     response = await client.get(url=BASE_URL, params=params)
     response.raise_for_status()
-    json = response.json()
+    # orjson is faster and more correct than the native Python json module.
+    # https://github.com/ijl/orjson
+    json = orjson.loads(response.content)
     if not json["data"]:
         raise ValueError(f'No restaurant data found for city "{city}"')
 
@@ -106,6 +109,9 @@ async def get_restaurant_data(city: str) -> list[RestaurantData]:
     limits = httpx.Limits(max_keepalive_connections=10, max_connections=10)
     async with httpx.AsyncClient(http2=True, limits=limits) as client:
         response = await api_call(client=client, city=city, page=1)
+        # In production, I would prefer to amend the API to return all results in
+        # a single request. If that's not possible, use asyncio to request all
+        # pages.
         if response.total_pages > 1:
             tasks = [
                 api_call(client=client, city=city, page=page)

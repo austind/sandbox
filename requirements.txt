@@ -11,3 +11,5 @@ napalm
 h2
 isort
 pydantic
+orjson
+retrying
