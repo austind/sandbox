@@ -8,6 +8,7 @@ import httpx
 import orjson
 import uvloop
 from pydantic import BaseModel, Field, PositiveFloat, PositiveInt
+from retrying import retry
 
 """Return a list of top-rated restaurants in a given city.
 
@@ -45,6 +46,8 @@ class APIResponse(BaseModel):
     total_pages: PositiveInt
 
 
+# Exponential backoff for failures, up to three attempts
+@retry(wait_exponential_multiplier=1000, stop_max_attempt_number=3)
 async def api_call(client: httpx.AsyncClient, city: str, page: int = 1) -> APIResponse:
     """Make an API call for a single page of data for a given city.
 
