@@ -18,7 +18,7 @@ restaurant has an average rating of 4.7 stars, return only up to five
 total restaurants that also have 4.7 stars.
 """
 
-CITY = "denver"
+CITY = "seattle"
 BASE_URL = "https://jsonmock.hackerrank.com/api/food_outlets"
 
 
@@ -46,8 +46,25 @@ class APIResponse(BaseModel):
     total_pages: PositiveInt
 
 
-# Exponential backoff for failures, up to three attempts
-@retry(wait_exponential_multiplier=1000, stop_max_attempt_number=3)
+def retry_if_request_error(exception: Exception) -> bool:
+    """Only retry requests for RequestErrors.
+
+    RequestErrors are the only superclass of errors that might be transient
+    and could potentially benefit from retry logic. All other exceptions should
+    be raised.
+
+    See HTTPX exception hierarchy for more info:
+    https://www.python-httpx.org/exceptions/
+    """
+    return isinstance(exception, httpx.RequestError)
+
+
+# Exponential backoff for failures, up to three attempts, only for RequestErrors.
+@retry(
+    wait_exponential_multiplier=1000,
+    stop_max_attempt_number=3,
+    retry_on_exception=retry_if_request_error,
+)
 async def api_call(client: httpx.AsyncClient, city: str, page: int = 1) -> APIResponse:
     """Make an API call for a single page of data for a given city.
 
@@ -109,12 +126,14 @@ async def get_restaurant_data(city: str) -> list[RestaurantData]:
         N/A
 
     """
+    # An AsyncClient uses connection pooling to reduce overhead.
+    # HTTP/2 uses multiplexing, compressed headers, etc. to improve performance.
     limits = httpx.Limits(max_keepalive_connections=10, max_connections=10)
     async with httpx.AsyncClient(http2=True, limits=limits) as client:
         response = await api_call(client=client, city=city, page=1)
         # In production, I would prefer to amend the API to return all results in
-        # a single request. If that's not possible, use asyncio to request all
-        # pages.
+        # a single request. Assuming that's not possible, request all
+        # pages asynchronously.
         if response.total_pages > 1:
             tasks = [
                 api_call(client=client, city=city, page=page)
