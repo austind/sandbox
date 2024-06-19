@@ -115,6 +115,7 @@ async def api_call(
         response.raise_for_status()
     except httpx.CloseError:
         # We don't care if the connection couldn't be closed gracefully.
+        # TODO: Log this.
         pass
 
     # orjson is faster and more correct than the stdlib json module.
