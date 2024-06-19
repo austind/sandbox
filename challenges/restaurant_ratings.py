@@ -117,7 +117,7 @@ async def api_call(
         # We don't care if the connection couldn't be closed gracefully.
         pass
 
-    # orjson is faster and more correct than the native Python json module.
+    # orjson is faster and more correct than the stdlib json module.
     # https://github.com/ijl/orjson
     json = orjson.loads(response.content)
     if not json["data"]:
