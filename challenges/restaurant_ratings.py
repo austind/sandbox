@@ -106,7 +106,7 @@ async def api_call(
 
     Raises:
         - httpx.HTTPStatusError if status code is 4xx or 5xx.
-        - ValueError if no data found in the response.
+        - NoDataError if no data found in the response.
 
     """
     params = {"city": city, "page": page}
