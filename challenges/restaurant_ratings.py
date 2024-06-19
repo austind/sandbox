@@ -2,7 +2,6 @@ import asyncio
 import logging
 import pprint
 import time
-from http import HTTPStatus
 from typing import Annotated
 
 import httpx
@@ -62,27 +61,34 @@ def retry_api_call(exception: Exception) -> bool:
     Passed to the retrying.retry() decorator of the API call function
     to determine which exceptions should be retried.
 
-    NetworkErrors and TimeoutErrors are potentially transient. Working around
-    timeouts are handled with timeout tuning, which leaves NetworkErrors to
-    handle here.
-
-    However, NetworkError includes CloseError, which we don't care about for
-    retry logic. So that leaves only ConnectError, ReadError, and WriteError
-    to implement retry logic for.
-
-    We should also retry any requests that are rate-limited (receive 429 Too
-    Many Requests).
+    Returns True for any network, client, or server errors that might be transient.
 
     Reference: https://www.python-httpx.org/exceptions/
     """
-    rate_limited = False
-    if isinstance(exception, httpx.HTTPStatusError):
-        if exception.response.status_code == HTTPStatus.TOO_MANY_REQUESTS:
-            rate_limited = True
-
-    return rate_limited or isinstance(
-        exception, (httpx.ConnectError, httpx.ReadError, httpx.WriteError)
+    # These are the only network errors we care to retry.
+    transient_network_errors = (httpx.ConnectError, httpx.ReadError, httpx.WriteError)
+    # Any of these server errors are potentially transient, and worth retrying.
+    transient_server_errors = (
+        httpx.codes.INTERNAL_SERVER_ERROR,
+        httpx.codes.BAD_GATEWAY,
+        httpx.codes.GATEWAY_TIMEOUT,
+        httpx.codes.SERVICE_UNAVAILABLE,
     )
+    is_transient_network_error = isinstance(exception, transient_network_errors)
+    is_transient_server_error = False
+    is_rate_limited = False
+    if isinstance(exception, httpx.HTTPStatusError):
+        status_code = exception.response.status_code
+        if status_code == httpx.codes.TOO_MANY_REQUESTS:
+            # The 429 Too Many Requests response should also come with a
+            # Retry-After header, indicating when the next request should be
+            # made. For production it would be better to respect this header,
+            # but for most cases an exponential backoff is fine.
+            is_rate_limited = True
+        if status_code in transient_server_errors:
+            is_transient_network_error = True
+
+    return is_rate_limited or is_transient_server_error or is_transient_network_error
 
 
 # Exponential backoff for failures, up to three attempts.
