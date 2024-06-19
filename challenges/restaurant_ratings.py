@@ -66,8 +66,10 @@ def retry_api_call(exception: Exception) -> bool:
 
     Reference: https://www.python-httpx.org/exceptions/
     """
-    # These are the only network errors we care to retry.
+    # These are the only network errors we care to retry. CloseError is the only
+    # other network error, but we don't care if the connection isn't closed gracefully.
     transient_network_errors = (httpx.ConnectError, httpx.ReadError, httpx.WriteError)
+
     # Any of these server errors are potentially transient, and worth retrying.
     transient_server_errors = (
         httpx.codes.INTERNAL_SERVER_ERROR,
@@ -75,6 +77,7 @@ def retry_api_call(exception: Exception) -> bool:
         httpx.codes.GATEWAY_TIMEOUT,
         httpx.codes.SERVICE_UNAVAILABLE,
     )
+
     is_transient_network_error = isinstance(exception, transient_network_errors)
     is_transient_server_error = False
     is_rate_limited = False
