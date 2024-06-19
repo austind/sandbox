@@ -23,6 +23,7 @@ BASE_URL = "https://jsonmock.hackerrank.com/api/food_outlets"
 
 
 logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 AvgRating = Annotated[PositiveFloat, Field(ge=0.0, le=5.0)]
 PositiveIntOrZero = Annotated[int, Field(ge=0)]
@@ -119,10 +120,9 @@ async def api_call(
     response = await client.get(url=BASE_URL, params=params)
     try:
         response.raise_for_status()
-    except httpx.CloseError:
+    except httpx.CloseError as exc:
         # We don't care if the connection couldn't be closed gracefully.
-        # TODO: Log this.
-        pass
+        logger.warn(f"Error closing connection: {exc.request.url}")
 
     # orjson is faster and more correct than the stdlib json module.
     # https://github.com/ijl/orjson
