@@ -51,23 +51,35 @@ class APIResponse(BaseModel):
     total_pages: PositiveInt
 
 
+class NoDataError(Exception):
+    """Raised when API returns an empty data key."""
+
+
 def retry_api_call(exception: Exception) -> bool:
     """Whether to retry an API call based on the exception raised.
 
-    Passed to the retrying.retry() decorator to determine which exceptions
-    should be retried.
+    Passed to the retrying.retry() decorator of the API call function
+    to determine which exceptions should be retried.
 
-    RequestErrors are the only superclass of errors that might be transient
-    and could potentially benefit from retry logic. All other exceptions should
-    be raised.
+    NetworkErrors and TimeoutErrors are potentially transient. Working around
+    timeouts are handled with timeout tuning, which leaves NetworkErrors to
+    handle here.
+
+    However, NetworkError includes CloseError, which we don't care about for
+    retry logic. So that leaves only ConnectError, ReadError, and WriteError
+    to implement retry logic for.
 
     See HTTPX exception hierarchy for more info:
     https://www.python-httpx.org/exceptions/
     """
-    return isinstance(exception, httpx.RequestError)
+    return (
+        isinstance(exception, httpx.ConnectError)
+        or isinstance(exception, httpx.ReadError)
+        or isinstance(exception, httpx.WriteError)
+    )
 
 
-# Exponential backoff for failures, up to three attempts, only for RequestErrors.
+# Exponential backoff for failures, up to three attempts.
 @retry(
     wait_exponential_multiplier=1000,
     stop_max_attempt_number=3,
@@ -87,18 +99,23 @@ async def api_call(
         An APIResponse model based on to the data structure returned by the API.
 
     Raises:
-        - httpx.HTTPError if status code is not 2XX
+        - httpx.HTTPStatusError if status code is 4xx or 5xx.
         - ValueError if no data found in the response.
 
     """
     params = {"city": city, "page": page}
     response = await client.get(url=BASE_URL, params=params)
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    except httpx.CloseError:
+        # We don't care if the connection couldn't be closed gracefully.
+        pass
+
     # orjson is faster and more correct than the native Python json module.
     # https://github.com/ijl/orjson
     json = orjson.loads(response.content)
     if not json["data"]:
-        raise ValueError(f'No restaurant data found for city "{city}"')
+        raise NoDataError(f'No restaurant data found for city "{city}"')
 
     data = [
         RestaurantData(
