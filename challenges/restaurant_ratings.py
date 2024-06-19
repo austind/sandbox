@@ -2,6 +2,7 @@ import asyncio
 import logging
 import pprint
 import time
+from http import HTTPStatus
 from typing import Annotated
 
 import httpx
@@ -69,13 +70,18 @@ def retry_api_call(exception: Exception) -> bool:
     retry logic. So that leaves only ConnectError, ReadError, and WriteError
     to implement retry logic for.
 
-    See HTTPX exception hierarchy for more info:
-    https://www.python-httpx.org/exceptions/
+    We should also retry any requests that are rate-limited (receive 429 Too
+    Many Requests).
+
+    Reference: https://www.python-httpx.org/exceptions/
     """
-    return (
-        isinstance(exception, httpx.ConnectError)
-        or isinstance(exception, httpx.ReadError)
-        or isinstance(exception, httpx.WriteError)
+    rate_limited = False
+    if isinstance(exception, httpx.HTTPStatusError):
+        if exception.response.status_code == HTTPStatus.TOO_MANY_REQUESTS:
+            rate_limited = True
+
+    return rate_limited or isinstance(
+        exception, (httpx.ConnectError, httpx.ReadError, httpx.WriteError)
     )
 
 
