@@ -12,4 +12,4 @@ h2
 isort
 pydantic
 orjson
-retrying
+tenacity

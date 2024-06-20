@@ -9,7 +9,8 @@ import httpx
 import orjson
 import uvloop
 from pydantic import BaseModel, Field, PositiveFloat, PositiveInt
-from retrying import retry
+from tenacity import (RetryCallState, retry, retry_if_exception,
+                      stop_after_attempt, wait_exponential)
 
 """Return a list of top-rated restaurants in a given city.
 
@@ -22,14 +23,19 @@ total restaurants that also have 4.7 stars.
 CITY = "denver"
 BASE_URL = "https://jsonmock.hackerrank.com/api/food_outlets"
 
-# Potentially transient server errors to include in retry attempts
-TRANSIENT_SERVER_ERRORS = (
+# Potentially transient HTTP errors to include in retry attempts
+POTENTIALLY_TRANSIENT_HTTP_ERRORS = (
+    httpx.codes.TOO_MANY_REQUESTS,
     httpx.codes.INTERNAL_SERVER_ERROR,
     httpx.codes.BAD_GATEWAY,
     httpx.codes.GATEWAY_TIMEOUT,
     httpx.codes.SERVICE_UNAVAILABLE,
 )
-TRANSIENT_NETWORK_ERRORS = (httpx.ConnectError, httpx.ReadError, httpx.WriteError)
+POTENTIALLY_TRANSIENT_NETWORK_ERRORS = (
+    httpx.ConnectError,
+    httpx.ReadError,
+    httpx.WriteError,
+)
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -65,113 +71,53 @@ class NoDataError(Exception):
     """Raised when API returns an empty data key."""
 
 
-class MaxAttemptsFailed(Exception):
-    """Raised when maximum attempts to make an API call fail."""
-
-
-def retry_transient_errors(
-    max_attempts: int = 3,
-    exponential_backoff_factor: float = 0.3,
-    status_codes: Iterable | None = None,
-    logger=None,
-):
-    """Retries HTTPX requests that raise potentially transient network or HTTP status errors.
-
-    Retries the following errors up to max_attempts:
-        - httpx.ConnectError
-        - httpx.ReadError
-        - httpx.WriteError
-        - httpx.HTTPStatusError, if status_code is included in status_codes (see defaults below).
+def is_potentially_transient_error(exc) -> bool:
+    """Whether an exception is a potentially transient error.
 
     Args:
-        max_attempts: Maximum number of attempts before giving up.
-        exponential_backoff_factor: Factor to multiply for exponential backoff between retries.
-        status_codes: Iterable of HTTP status codes to retry in case of failure. If omitted, defaults to:
-            - 429 Too Many Requests (server-side rate limiting)
-            - 500 Internal Server Error
-            - 502 Bad Gateway
-            - 503 Service Unavailable
-            - 504 Gateway Timeout
-        logger: Logger instance to use. Defaults to logging.getLogger(__main__).
+        exc: Exception to consider.
 
     Returns:
-        Decorator.
+        Boolean if exception is potentially transient.
 
     Raises:
-        - httpx.ConnectError, httpx.ReadError, httpx.WriteError, or httpx.HTTPStatusError
-            received on final attempt.
-        - All other exceptions raised immediately.
+        N/A
 
     """
-    if status_codes is None:
-        status_codes = (
-            httpx.codes.TOO_MANY_REQUESTS,
-            httpx.codes.INTERNAL_SERVER_ERROR,
-            httpx.codes.BAD_GATEWAY,
-            httpx.codes.GATEWAY_TIMEOUT,
-            httpx.codes.SERVICE_UNAVAILABLE,
-        )
-
-    if logger is None:
-        import logging
-
-        logger = logging.getLogger(__name__)
-
-    def decorator(func):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            for attempt in range(1, max_attempts + 1):
-                delay = exponential_backoff_factor * (2**attempt)
-                last_exception = None
-                try:
-                    return await func(*args, **kwargs)
-                except httpx.ConnectError as exc:
-                    logger.warn(
-                        f"Network error connecting to host: {exc.request.url.host}"
-                    )
-                    last_exception = exc
-                except httpx.ReadError as exc:
-                    logger.warn(f"Network error reading data: {exc.request.url}")
-                    last_exception = exc
-                except httpx.WriteError as exc:
-                    logger.warn(f"Network error writing data: {exc.request.url}")
-                    last_exception = exc
-                except httpx.HTTPStatusError as exc:
-                    status_code = exc.response.status_code
-                    if status_code in status_codes:
-                        last_exception = exc
-                        if attempt < max_attempts:
-                            if status_code == httpx.codes.TOO_MANY_REQUESTS:
-                                retry_after = float(
-                                    exc.response.headers.get("Retry-After", delay)
-                                )
-                                logger.warn(
-                                    f"Rate limited: {exc.request.url}, retrying after {retry_after}s..."
-                                )
-                                await asyncio.sleep(retry_after)
-                            else:
-                                logger.warn(
-                                    f"HTTP error {status_code}: {exc.request.url}, retrying..."
-                                )
-                    else:
-                        raise
-                if attempt < max_attempts:
-                    logger.info(f"Waiting {delay}s before next attempt...")
-                    await asyncio.sleep(delay)
-                else:
-                    logger.error(f"All {max_attempts} attempts failed.")
-            raise (
-                last_exception
-                if last_exception
-                else MaxAttemptsFailed(f"Failed after {max_attempts} attempts.")
-            )
-
-        return wrapper
-
-    return decorator
+    if isinstance(exc, POTENTIALLY_TRANSIENT_NETWORK_ERRORS):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in POTENTIALLY_TRANSIENT_HTTP_ERRORS
+    return False
 
 
-@retry_transient_errors(max_attempts=3, exponential_backoff_factor=1.0)
+def context_aware_backoff(retry_state: RetryCallState) -> float:
+    """Use Retry-After header value for HTTP 429, exponential backoff otherwise.
+
+    Args:
+        retry_state: A tenacity.RetryCallState.
+
+    Returns:
+        A float for how long to wait between retries.
+
+    Raises:
+        N/A
+
+    """
+    last_exception = retry_state.outcome.exception()
+    if (
+        isinstance(last_exception, httpx.HTTPStatusError)
+        and last_exception.response.status_code == httpx.codes.TOO_MANY_REQUESTS
+    ):
+        return float(last_exception.response.headers.get("Retry-After", 1.0))
+    return wait_exponential(multiplier=1, min=1, max=10)(retry_state=retry_state)
+
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=context_aware_backoff,
+    retry=retry_if_exception(is_potentially_transient_error),
+)
 async def api_call(
     client: httpx.AsyncClient, city: str, page: PositiveInt = 1
 ) -> APIResponse:
