@@ -22,15 +22,17 @@ total restaurants that also have 4.7 stars.
 CITY = "denver"
 BASE_URL = "https://jsonmock.hackerrank.com/api/food_outlets"
 
-# Potentially transient HTTP errors to include in retry attempts
-POTENTIALLY_TRANSIENT_HTTP_ERRORS = (
+# Potentially transient HTTP errors to retry
+RETRY_HTTP_ERRORS = (
     httpx.codes.TOO_MANY_REQUESTS,
     httpx.codes.INTERNAL_SERVER_ERROR,
     httpx.codes.BAD_GATEWAY,
     httpx.codes.GATEWAY_TIMEOUT,
     httpx.codes.SERVICE_UNAVAILABLE,
 )
-POTENTIALLY_TRANSIENT_NETWORK_ERRORS = (
+
+# Potentially transient network errors to retry
+RETRY_NETWORK_ERRORS = (
     httpx.ConnectError,
     httpx.ReadError,
     httpx.WriteError,
@@ -83,10 +85,10 @@ def is_potentially_transient_error(exc) -> bool:
         N/A
 
     """
-    if isinstance(exc, POTENTIALLY_TRANSIENT_NETWORK_ERRORS):
+    if isinstance(exc, RETRY_NETWORK_ERRORS):
         return True
     if isinstance(exc, httpx.HTTPStatusError):
-        return exc.response.status_code in POTENTIALLY_TRANSIENT_HTTP_ERRORS
+        return exc.response.status_code in RETRY_HTTP_ERRORS
     return False
 
 
